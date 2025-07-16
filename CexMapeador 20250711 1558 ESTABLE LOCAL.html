@@ -281,6 +281,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
 
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
     function handleSearch() {
         const searchTerm = searchInput.value.toLowerCase().trim();
         const allCells = document.querySelectorAll('.sub-cell, .shelf h2');
@@ -300,6 +312,8 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    const debouncedSearch = debounce(handleSearch, 300);
 
     function saveStateToHistory() {
         history.push(JSON.parse(JSON.stringify(gridState)));
@@ -672,7 +686,7 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-    searchInput.addEventListener('input', handleSearch);
+    searchInput.addEventListener('input', debouncedSearch);
 
     document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key.toLowerCase() === 'z') {
