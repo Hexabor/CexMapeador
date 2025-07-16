@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa Interactivo Muro v2.32 - CeX Usera (MEJORADO)</title>
+  <style>
+    :root {
+        --color-view: #6b7280; --color-edit: #8b5cf6; --color-move: #10b981;
+        --color-dup: #f59e0b; --color-merge: #06b6d4; --color-split: #06b6d4;
+        --color-h-split: #ec4899; --color-h-merge: #ec4899;
+        --color-undo: #dc2626; --color-reset: #dc2626; --color-file: #374151;
+        
+        --c1: #ffadad; --c2: #ffd6a5; --c3: #fdffb6; --c4: #caffbf;
+        --c5: #9bf6ff; --c6: #a0c4ff; --c7: #bdb2ff; --c8: #ffc6ff;
+        --c9: #ffffff;
+
+        --tc1: #ef4444; --tc2: #3b82f6; --tc3: #22c55e; --tc4: #eab308;
+        --tc5: #8b5cf6; --tc6: #64748b;
+    }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body{
+        font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif;
+        background:#f3f4f6; display:flex; flex-direction:column;
+    }
+    .app-header { padding: 16px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+    .grid-container { flex-grow: 1; padding: 0 16px 16px 16px; overflow-x: auto; }
+    h1{margin:0 auto;font-size:22px;color:#374151; text-align: center; padding-bottom: 8px;}
+    
+    .toolbar-container{display:flex;justify-content:center;align-items:center;gap:16px;flex-wrap:wrap}
+    .button-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:8px}
+    .button-grid button{width:110px;height:40px;display:flex;align-items:center;justify-content:center;padding:4px}
+    
+    button{border:none;border-radius:8px;color:#fff;font-size:14px;cursor:pointer;transition:transform .1s ease,background-color .2s ease}
+    button:active{transform:scale(.95)}
+    button:disabled{background:#9ca3af !important;cursor:not-allowed;transform:none}
+
+    button.view{background:var(--color-view)}
+    button.move{background:var(--color-move)}
+    button.dup {background:var(--color-dup)}
+    button.edit{background:var(--color-edit)}
+    button.merge{background:var(--color-merge)}
+    button.split{background:var(--color-split)}
+    button.h-split{background:var(--color-h-split)}
+    button.h-merge{background:var(--color-h-merge)}
+    button.undo{background:var(--color-undo)}
+    button.reset{background:var(--color-reset)}
+    button.file{background:var(--color-file)}
+    button.active{box-shadow:0 0 0 4px rgba(0,0,0,.25);z-index:10}
+
+    #searchInput{width:100%;max-width:500px;margin:8px auto;padding:8px 12px;font-size:14px;border-radius:8px;border:1px solid #ccc;display:block; box-sizing: border-box;}
+    
+    .color-palette-toolbar { display: flex; justify-content: center; gap: 10px; padding-top: 8px; }
+    .color-swatch {
+        width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
+        border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .color-swatch:hover { transform: scale(1.1); }
+    .color-swatch.active { box-shadow: 0 0 0 4px var(--color-dup); transform: scale(1.1); }
+    .color-swatch[data-color="c9"] { border-color: #ddd; }
+
+    .grid .dimmed{opacity:0.2;transition:opacity .3s ease-in-out}
+    .grid .highlight{outline:3px solid var(--color-move);outline-offset:-1px;border-radius:2px}
+    .grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(160px,1fr);gap:8px;padding-bottom: 16px;}
+    .shelf{background:#fff;border:2px solid #ccc;border-radius:12px;box-shadow:2px 2px 5px rgba(0,0,0,.1);display:flex;flex-direction:column;min-width:160px}
+    .shelf h2{
+        text-align:center;font-size:14px;background-color:#e5e7eb;margin:0;padding:4px 8px;color:#1f2937; 
+        cursor: default; transition: background-color 0.3s ease, color 0.3s ease;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .shelf h2.editable {cursor: pointer;}
+    .level{border-top:1px solid #ddd;height:50px;font-size:12px;display:flex;align-items:center;justify-content:center;padding:0;text-align:center;word-break:break-word; position: relative; box-sizing: border-box;}
+    
+    .sub-cell-container { display: flex; width: 100%; height: 100%; }
+    .sub-cell {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        height: 100%; padding: 6px; box-sizing: border-box;
+    }
+    .sub-cell:first-child:not(:last-child) { border-right: 1px dashed #ccc; }
+    .sub-cell.editable { cursor: pointer; }
+
+    .c1{background-color:var(--c1)} .c2{background-color:var(--c2)} .c3{background-color:var(--c3)}
+    .c4{background-color:var(--c4)} .c5{background-color:var(--c5)} .c6{background-color:var(--c6)}
+    .c7{background-color:var(--c7)} .c8{background-color:var(--c8)} .c9{background-color:var(--c9)}
+    
+    .level[data-span="0"]{display:none}
+    .selected{outline:4px solid var(--color-dup);outline-offset:-2px}
+    .placeholder{color:#ccc;font-size:24px;line-height:1}
+    
+    .toast-container{position:fixed;top:16px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px}
+    .toast{padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);opacity:0;transform:translateX(100%);animation:slideIn .5s forwards}
+    .toast.success{background:var(--color-move)}.toast.error{background:var(--color-undo)}.toast.info{background:var(--color-view)}
+    @keyframes slideIn{to{opacity:1;transform:translateX(0)}}
+
+    @media (max-width: 768px) {
+        .app-header { padding: 8px; gap: 8px; }
+        h1 { font-size: 18px; padding-bottom: 4px; }
+        #searchInput { margin: 0; padding: 6px 10px; font-size: 13px;}
+        .toolbar-container { flex-direction: column; gap: 8px; }
+        .button-grid { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); }
+        .button-grid button { width: 100%; height: 36px; font-size: 12px; }
+        .color-palette-toolbar { gap: 8px; padding-top: 4px; }
+        .color-swatch { width: 22px; height: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Mapa Interactivo Muro v2.32 (MEJORADO)</h1>
+    
+    <input type="search" id="searchInput" placeholder="Buscar contenido... (con debounce optimizado)">
+
+    <div class="toolbar-container">
+      <div class="button-grid">
+        <button id="viewBtn" class="view">Visualizar</button>
+        <button id="editBtn" class="edit">Editar</button>
+        <button id="dupBtn"  class="dup">Duplicar</button>
+        <button id="moveBtn" class="move">Intercambiar</button>
+      </div>
+      <div class="button-grid">
+          <button id="mergeBtn" class="merge">Apilar ↑</button>
+          <button id="splitBtn" class="split">Desapilar ↓</button>
+          <button id="hMergeBtn" class="h-merge">Unificar ↔</button>
+          <button id="hSplitBtn" class="h-split">Partir ↔</button>
+      </div>
+      <div class="button-grid">
+        <button id="undoBtn" class="undo">Deshacer</button>
+        <button id="resetBtn" class="reset">Reiniciar</button>
+        <button id="exportBtn" class="file">Exportar</button>
+        <button id="importBtn" class="file">Importar</button>
+      </div>
+    </div>
+    
+    <div id="colorPaletteToolbar" class="color-palette-toolbar">
+        <div class="color-swatch c1" data-color="c1"></div>
+        <div class="color-swatch c2" data-color="c2"></div>
+        <div class="color-swatch c3" data-color="c3"></div>
+        <div class="color-swatch c4" data-color="c4"></div>
+        <div class="color-swatch c5" data-color="c5"></div>
+        <div class="color-swatch c6" data-color="c6"></div>
+        <div class="color-swatch c7" data-color="c7"></div>
+        <div class="color-swatch c8" data-color="c8"></div>
+        <div class="color-swatch c9" data-color="c9"></div>
+    </div>
+    <div id="titleColorPaletteToolbar" class="color-palette-toolbar" style="display: none;">
+        <div class="color-swatch" style="background-color: var(--tc1);" data-color-hex="#ef4444"></div>
+        <div class="color-swatch" style="background-color: var(--tc2);" data-color-hex="#3b82f6"></div>
+        <div class="color-swatch" style="background-color: var(--tc3);" data-color-hex="#22c55e"></div>
+        <div class="color-swatch" style="background-color: var(--tc4);" data-color-hex="#eab308"></div>
+        <div class="color-swatch" style="background-color: var(--tc5);" data-color-hex="#8b5cf6"></div>
+        <div class="color-swatch" style="background-color: var(--tc6);" data-color-hex="#64748b"></div>
+        <div class="color-swatch c9" data-color-hex=""></div>
+    </div>
+  </header>
+
+  <main class="grid-container">
+    <div id="grid" class="grid"></div>
+  </main>
+  
+  <div id="toast-container" class="toast-container"></div>
+  <input type="file" id="fileInput" accept=".json" style="display:none">
+
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+    const gridEl = document.getElementById('grid');
+    const searchInput = document.getElementById('searchInput');
+    const colorPaletteToolbar = document.getElementById('colorPaletteToolbar');
+    const titleColorPaletteToolbar = document.getElementById('titleColorPaletteToolbar');
+    const buttons = {
+        view: document.getElementById('viewBtn'),
+        move: document.getElementById('moveBtn'),
+        dup: document.getElementById('dupBtn'),
+        edit: document.getElementById('editBtn'),
+        merge: document.getElementById('mergeBtn'),
+        split: document.getElementById('splitBtn'),
+        hMerge: document.getElementById('hMergeBtn'),
+        hSplit: document.getElementById('hSplitBtn'),
+        undo: document.getElementById('undoBtn'),
+        export: document.getElementById('exportBtn'),
+        import: document.getElementById('importBtn'),
+        reset: document.getElementById('resetBtn'),
+    };
+    const fileInput = document.getElementById('fileInput');
+
+    let gridState = [];
+    let history = [];
+    let mode = 'view';
+    let firstSelection = null;
+    let activeColor = null;
+    let editingTitleCell = null;
+
+    function generateInitialState() {
+        const shelves = 9;
+        const levelsPerShelf = 7;
+        let state = [];
+        for (let i = 1; i <= shelves; i++) {
+            let levels = [];
+            for (let j = 1; j <= levelsPerShelf; j++) {
+                levels.push({ 
+                    id: `s${i}-l${j}`, 
+                    span: 1,
+                    subCells: [ { content: '', color: '' } ]
+                });
+            }
+            state.push({
+                id: `s${i}`,
+                name: `Est. ${i}`,
+                titleColor: '',
+                levels: levels,
+            });
+        }
+        return state;
+    }
+
+    function renderGrid() {
+        gridEl.innerHTML = '';
+        gridState.forEach(shelfData => {
+            const shelf = document.createElement('div');
+            shelf.className = 'shelf';
+            const title = document.createElement('h2');
+            title.textContent = shelfData.name;
+            title.dataset.id = shelfData.id;
+            title.setAttribute('title', shelfData.name);
+            
+            if (shelfData.titleColor) {
+                title.style.backgroundColor = shelfData.titleColor;
+                title.style.color = isColorDark(shelfData.titleColor) ? 'white' : 'black';
+            } else {
+                title.style.backgroundColor = '';
+                title.style.color = '';
+            }
+
+            shelf.appendChild(title);
+
+            shelfData.levels.forEach((levelData, levelIndex) => {
+                const level = document.createElement('div');
+                level.className = 'level';
+                level.dataset.id = levelData.id;
+                level.dataset.span = levelData.span;
+
+                if (levelData.span > 1) {
+                    const singleCellHeight = 51; 
+                    level.style.height = `${(levelData.span * singleCellHeight) - 1}px`;
+                } else {
+                    level.style.height = '';
+                }
+
+                const subCellContainer = document.createElement('div');
+                subCellContainer.className = 'sub-cell-container';
+                levelData.subCells.forEach((subCellData, subIndex) => {
+                    const subCell = document.createElement('div');
+                    subCell.className = 'sub-cell';
+                    subCell.dataset.subIndex = subIndex;
+                    if (subCellData.content) {
+                        subCell.textContent = subCellData.content;
+                    } else {
+                        subCell.textContent = '·';
+                        subCell.classList.add('placeholder');
+                    }
+                    if (subCellData.color) {
+                        subCell.classList.add(subCellData.color);
+                    }
+                    subCellContainer.appendChild(subCell);
+                });
+                level.appendChild(subCellContainer);
+                shelf.appendChild(level);
+            });
+            gridEl.appendChild(shelf);
+        });
+        setMode(mode, true);
+    }
+
+    function isColorDark(hexColor) {
+        if (!hexColor) return false;
+        const color = (hexColor.charAt(0) === '#') ? hexColor.substring(1, 7) : hexColor;
+        const r = parseInt(color.substring(0, 2), 16);
+        const g = parseInt(color.substring(2, 4), 16);
+        const b = parseInt(color.substring(4, 6), 16);
+        return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+    }
+
+    // MEJORA: Función debounce para optimizar la búsqueda
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    function handleSearch() {
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const allCells = document.querySelectorAll('.sub-cell, .shelf h2');
+        if (!searchTerm) {
+            allCells.forEach(cell => cell.classList.remove('dimmed', 'highlight'));
+            return;
+        }
+        allCells.forEach(cell => {
+            const isPlaceholder = cell.classList.contains('placeholder');
+            const cellText = isPlaceholder ? '' : cell.textContent.toLowerCase();
+            if (cellText.includes(searchTerm)) {
+                cell.classList.remove('dimmed');
+                cell.classList.add('highlight');
+            } else {
+                cell.classList.remove('highlight');
+                cell.classList.add('dimmed');
+            }
+        });
+    }
+
+    // MEJORA: Búsqueda optimizada con debounce de 300ms
+    const debouncedSearch = debounce(handleSearch, 300);
+
+    function saveStateToHistory() {
+        history.push(JSON.parse(JSON.stringify(gridState)));
+        if (history.length > 30) history.shift();
+        updateUndoButton();
+    }
+
+    function undo() {
+        if (history.length > 0) {
+            gridState = history.pop();
+            renderGrid();
+            saveGridToStorage();
+            showToast('Última acción deshecha', 'info');
+        }
+        updateUndoButton();
+    }
+
+    function updateUndoButton() {
+        buttons.undo.disabled = history.length === 0;
+    }
+
+    function loadGridFromStorage() {
+        const savedState = localStorage.getItem('cexGridState_v2');
+        if (savedState) {
+            gridState = JSON.parse(savedState);
+        } else {
+            gridState = generateInitialState();
+        }
+        renderGrid();
+        updateUndoButton();
+    }
+
+    function saveGridToStorage() {
+        localStorage.setItem('cexGridState_v2', JSON.stringify(gridState));
+    }
+
+    function handleResetClick() {
+        const confirmation = confirm('¿Estás seguro de que quieres borrar todo el mapa y empezar de cero? Esta acción no se puede deshacer.');
+        if (confirmation) {
+            localStorage.removeItem('cexGridState_v2');
+            location.reload();
+        }
+    }
+
+    function exportGrid() {
+        let fileName = prompt("Introduce el nombre para el archivo:", `mapa_layout_${new Date().toISOString().slice(0,10)}`);
+
+        if (fileName === null) {
+            showToast('Exportación cancelada', 'info');
+            return;
+        }
+        
+        if (!fileName.toLowerCase().endsWith('.json')) {
+            fileName += '.json';
+        }
+
+        const dataStr = JSON.stringify(gridState, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Archivo '${fileName}' exportado`, 'success');
+    }
+
+    function importGrid() {
+        fileInput.click();
+    }
+
+    fileInput.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = event => {
+            try {
+                const newState = JSON.parse(event.target.result);
+                if (Array.isArray(newState) && newState[0].levels) {
+                    saveStateToHistory();
+                    gridState = newState;
+                    renderGrid();
+                    saveGridToStorage();
+                    showToast('Layout importado', 'success');
+                } else {
+                    showToast('Archivo no válido', 'error');
+                }
+            } catch (error) {
+                showToast('Error al leer el archivo', 'error');
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = null;
+    });
+
+    function setMode(newMode, keepColorMode = false) {
+        mode = newMode;
+        Object.values(buttons).forEach(b => b.classList.remove('active'));
+        if (buttons[newMode]) {
+            buttons[newMode].classList.add('active');
+        }
+        
+        if (!keepColorMode) {
+            activeColor = null;
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        }
+
+        document.querySelectorAll('.sub-cell, .shelf h2').forEach(el => {
+            el.classList.toggle('editable', mode === 'edit');
+            el.classList.remove('selected');
+            if(el.tagName !== 'H2') el.contentEditable = 'false';
+        });
+        firstSelection = null;
+    }
+
+    function findCellData(id) {
+        if (!id) return null;
+        if (!id.includes('-')) {
+            return gridState.find(shelf => shelf.id === id);
+        }
+        const parts = id.split('-');
+        const shelfIndex = parseInt(parts[0].substring(1)) - 1;
+        const levelIndex = parseInt(parts[1].substring(1)) - 1;
+        return gridState[shelfIndex].levels[levelIndex];
+    }
+
+    function getCellIndexes(id) {
+        if (!id) return null;
+        const parts = id.split('-');
+        const shelfIndex = parseInt(parts[0].substring(1)) - 1;
+        const levelIndex = parts.length > 1 ? parseInt(parts[1].substring(1)) - 1 : -1;
+        return { shelfIndex, levelIndex };
+    }
+
+    colorPaletteToolbar.addEventListener('click', (e) => {
+        const swatch = e.target.closest('.color-swatch');
+        if (!swatch) return;
+        const selectedColor = swatch.dataset.color;
+        if (swatch.classList.contains('active')) {
+            activeColor = null;
+            swatch.classList.remove('active');
+            setMode('view');
+            return;
+        }
+        setMode('paint');
+        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        swatch.classList.add('active');
+        activeColor = selectedColor;
+    });
+
+    titleColorPaletteToolbar.addEventListener('click', (e) => {
+        const swatch = e.target.closest('.color-swatch');
+        if (!swatch || !editingTitleCell) return;
+        
+        const newColor = swatch.dataset.colorHex;
+        const shelfData = findCellData(editingTitleCell.dataset.id);
+
+        if (shelfData && shelfData.titleColor !== newColor) {
+            saveStateToHistory();
+            shelfData.titleColor = newColor;
+            renderGrid();
+            saveGridToStorage();
+        }
+    });
+
+    function showTitlePalette(show) {
+        titleColorPaletteToolbar.style.display = show ? 'flex' : 'none';
+        colorPaletteToolbar.style.display = show ? 'none' : 'flex';
+    }
+
+    function finishTitleEdit() {
+        if (!editingTitleCell) return;
+        const cellEl = editingTitleCell;
+        cellEl.contentEditable = 'false';
+        showTitlePalette(false);
+        
+        const cellData = findCellData(cellEl.dataset.id);
+        const newText = cellEl.textContent.trim();
+        if (cellData && cellData.name !== newText) {
+            saveStateToHistory();
+            cellData.name = newText;
+            saveGridToStorage();
+        }
+        editingTitleCell = null;
+        renderGrid();
+    }
+
+    gridEl.addEventListener('click', e => {
+        const subCellEl = e.target.closest('.sub-cell');
+        const titleEl = e.target.closest('.shelf h2');
+        const cellEl = subCellEl || titleEl;
+        if (!cellEl) return;
+
+        const levelEl = cellEl.closest('.level');
+        const levelId = levelEl ? levelEl.dataset.id : null;
+        const levelData = levelId ? findCellData(levelId) : null;
+
+        if (activeColor && subCellEl) {
+            const subIndex = parseInt(subCellEl.dataset.subIndex);
+            const subCellData = levelData.subCells[subIndex];
+            if (subCellData) {
+                const newColor = activeColor === 'c9' ? '' : activeColor;
+                if (subCellData.color !== newColor) {
+                    saveStateToHistory();
+                    subCellData.color = newColor;
+                    renderGrid();
+                    saveGridToStorage();
+                }
+            }
+            return;
+        }
+        
+        if (mode === 'view') return;
+        
+        if (mode === 'edit') {
+            if (editingTitleCell && editingTitleCell !== titleEl) {
+                finishTitleEdit();
+            }
+
+            if (titleEl) {
+                editingTitleCell = titleEl;
+                showTitlePalette(true);
+            } else if (subCellEl) {
+                if (subCellEl.classList.contains('placeholder')) {
+                    subCellEl.textContent = '';
+                }
+                subCellEl.onblur = () => {
+                    const subIndex = parseInt(subCellEl.dataset.subIndex);
+                    const currentLevelData = findCellData(levelId);
+                    if (currentLevelData && currentLevelData.subCells[subIndex].content !== subCellEl.textContent.trim()) {
+                        saveStateToHistory();
+                        currentLevelData.subCells[subIndex].content = subCellEl.textContent.trim();
+                        saveGridToStorage();
+                    }
+                    renderGrid();
+                };
+            }
+
+            cellEl.contentEditable = 'true';
+            cellEl.focus();
+            return;
+        }
+
+        if (!levelEl) return;
+
+        if (mode === 'hSplit') {
+            if (levelData.subCells.length === 1) {
+                saveStateToHistory();
+                levelData.subCells.push({ content: '', color: '' });
+                renderGrid();
+                saveGridToStorage();
+            } else {
+                showToast('Esta balda ya está partida', 'error');
+            }
+            return;
+        }
+
+        if (mode === 'hMerge') {
+            if (levelData.subCells.length > 1) {
+                saveStateToHistory();
+                levelData.subCells.splice(1);
+                renderGrid();
+                saveGridToStorage();
+            } else {
+                showToast('Esta balda no está partida', 'error');
+            }
+            return;
+        }
+
+        if (mode === 'split') {
+            if (levelData.span > 1) {
+                saveStateToHistory();
+                const { shelfIndex, levelIndex } = getCellIndexes(levelId);
+                const originalSpan = gridState[shelfIndex].levels[levelIndex].span;
+                for(let i = 0; i < originalSpan; i++) {
+                    const currentCell = gridState[shelfIndex].levels[levelIndex + i];
+                    currentCell.span = 1;
+                    if (i > 0) {
+                        currentCell.subCells = [{ content: '', color: '' }];
+                    }
+                }
+                renderGrid();
+                saveGridToStorage();
+            } else {
+                showToast('Esta balda no está unida', 'error');
+            }
+            return;
+        }
+
+        if (!firstSelection) {
+            firstSelection = { el: levelEl, data: levelData, id: levelId };
+            levelEl.classList.add('selected');
+            return;
+        }
+
+        if (firstSelection.el === levelEl) {
+            levelEl.classList.remove('selected');
+            firstSelection = null;
+            return;
+        }
+
+        const secondSelection = { el: levelEl, data: levelData, id: levelId };
+        
+        saveStateToHistory();
+        if (mode === 'merge') {
+            const { shelfIndex: i1, levelIndex: j1 } = getCellIndexes(firstSelection.id);
+            const { shelfIndex: i2, levelIndex: j2 } = getCellIndexes(secondSelection.id);
+
+            if (i1 !== i2) {
+                showToast('Solo se pueden unir baldas de la misma estantería', 'error');
+            } else if (j2 === j1 + firstSelection.data.span || j1 === j2 + secondSelection.data.span) {
+                const topIndex = Math.min(j1, j2);
+                const topCell = gridState[i1].levels[topIndex];
+                const bottomCell = gridState[i1].levels[Math.max(j1, j2)];
+                const newSpan = topCell.span + bottomCell.span;
+                topCell.span = newSpan;
+                topCell.subCells = topCell.subCells.length > 1 ? topCell.subCells : bottomCell.subCells;
+                for(let i = 1; i < newSpan; i++) {
+                    gridState[i1].levels[topIndex + i].span = 0;
+                }
+            } else {
+                 showToast('Solo se pueden unir baldas contiguas', 'error');
+            }
+        } else if (mode === 'move') {
+            [firstSelection.data.subCells, secondSelection.data.subCells] = [secondSelection.data.subCells, firstSelection.data.subCells];
+        } else if (mode === 'dup') {
+            secondSelection.data.subCells = JSON.parse(JSON.stringify(firstSelection.data.subCells));
+        }
+        
+        renderGrid();
+        saveGridToStorage();
+        firstSelection = null;
+    });
+
+    document.addEventListener('click', (e) => {
+        if (editingTitleCell) {
+            const isClickInsideTitle = editingTitleCell.contains(e.target);
+            const isClickInsidePalette = titleColorPaletteToolbar.contains(e.target);
+            if (!isClickInsideTitle && !isClickInsidePalette) {
+                finishTitleEdit();
+            }
+        }
+    });
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    Object.values(buttons).forEach(button => {
+        button.addEventListener('click', () => {
+            const newMode = Object.keys(buttons).find(key => buttons[key] === button);
+            if (newMode) {
+                if (['undo', 'export', 'import', 'reset'].includes(newMode)) {
+                    if (newMode === 'undo') undo();
+                    else if (newMode === 'export') exportGrid();
+                    else if (newMode === 'import') importGrid();
+                    else if (newMode === 'reset') handleResetClick();
+                } else {
+                    setMode(newMode);
+                }
+            }
+        });
+    });
+    
+    // MEJORA: Búsqueda optimizada con debounce
+    searchInput.addEventListener('input', debouncedSearch);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            undo();
+        }
+    });
+
+    loadGridFromStorage();
+});
+</script>
+</body>
+</html>
